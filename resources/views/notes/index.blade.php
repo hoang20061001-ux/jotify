@@ -893,6 +893,25 @@
             .trim();
     }
 
+    function formatUpdatedAt(note) {
+        if (note.syncStatus === 'pending_update' && note.updated_at === 'Pending sync…') {
+            return 'Pending sync…';
+        }
+        const ts = note.updated_at_ts || note.created_at_ts || 0;
+        if (!ts) return note.updated_at || '';
+        const age = Math.floor(Date.now() / 1000) - ts;
+        if (age <= 5) return 'Just now';
+        if (age < 60) return `${age}s ago`;
+        const minutes = Math.floor(age / 60);
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 7) return `${days}d ago`;
+        const date = new Date(ts * 1000);
+        return date.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+    }
+
     window.buildNoteCard = function(note) {
         const isGrid    = document.getElementById('notes-container')?.classList.contains('grid');
         const borderTop = note.note_color && note.note_color !== 'none' ? `border-top:3px solid ${note.note_color};` : '';
@@ -969,6 +988,7 @@
             }).join('');
             return `<div class="note-img-grid note-img-grid--${Math.min(shown.length, 4)} mt-2">${cells}</div>`;
         }
+        const displayUpdatedAt = formatUpdatedAt(note);
         const thumbGrid = buildImgGrid(note);
 
         if (isGrid) {
@@ -992,7 +1012,7 @@
                         ? `<p class="note-preview" style="font-style:italic;opacity:0.5;">🔒 Content is protected</p>`
                         : `<p class="note-preview">${esc(note.content)}</p>`}
                     ${thumbGrid}
-                    <div class="note-footer"><span class="note-time">${note.updated_at}</span></div>
+                    <div class="note-footer"><span class="note-time">${displayUpdatedAt}</span></div>
                 </div>
             </div>`;
         } else {
@@ -1011,7 +1031,7 @@
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 min-w-0">
                                 <h3 class="font-semibold text-sm truncate flex-1 min-w-0">${esc(note.title) || 'Untitled'}</h3>
-                                <span class="text-xs text-muted whitespace-nowrap note-list-time flex-shrink-0" style="opacity:0.7;">${note.updated_at}</span>
+                                <span class="text-xs text-muted whitespace-nowrap note-list-time flex-shrink-0" style="opacity:0.7;">${displayUpdatedAt}</span>
                             </div>
                             ${badgesRow}
                             ${note.has_password

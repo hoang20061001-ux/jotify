@@ -365,6 +365,7 @@ export async function getNoteById(id) {
  */
 export async function createNoteOfflineFirst(data = {}) {
     const tempId = 'temp_' + Date.now();
+    const nowSeconds = Math.floor(Date.now() / 1000);
     const note = {
         id:            tempId,
         title:         data.title   || '',
@@ -376,9 +377,11 @@ export async function createNoteOfflineFirst(data = {}) {
         is_shared:     false,
         labels:        [],
         updated_at:    'Just now',
-        created_at_ts: Math.floor(Date.now() / 1000),
+        updated_at_ts: nowSeconds,
+        created_at_ts: nowSeconds,
         syncStatus:    'pending_create',
         _pending:      true,
+        _localEditedAt: Date.now(),
     };
     try {
         const db = await getDB();
@@ -389,6 +392,7 @@ export async function createNoteOfflineFirst(data = {}) {
             title:         note.title,
             content:       note.content,
             created_at_ts: note.created_at_ts,
+            updated_at_ts: note.updated_at_ts,
             queued_at:     Date.now(),
         });
     } catch (e) {
@@ -417,14 +421,19 @@ export async function updateNoteOfflineFirst(noteId, data) {
         }
         if (!existing) {
             // Note not in IDB — create it
+            const nowSeconds = Math.floor(Date.now() / 1000);
             await db.put(STORE_NOTES, {
                 id: noteId, title: data.title || '', content: data.content || '',
                 note_color: 'none', is_pinned: false, has_password: false,
                 note_password: null, is_shared: false, labels: [],
-                updated_at: 'Just now', created_at_ts: Math.floor(Date.now() / 1000),
+                updated_at: 'Just now',
+                updated_at_ts: nowSeconds,
+                created_at_ts: nowSeconds,
                 syncStatus: 'pending_update', _pending: true,
+                _localEditedAt: Date.now(),
             });
         } else {
+            const nowSeconds = Math.floor(Date.now() / 1000);
             const newStatus = existing.syncStatus === 'pending_create'
                 ? 'pending_create'  // keep as pending_create
                 : 'pending_update';
@@ -433,6 +442,7 @@ export async function updateNoteOfflineFirst(noteId, data) {
                 title:      data.title   ?? existing.title,
                 content:    data.content ?? existing.content,
                 updated_at: 'Just now',
+                updated_at_ts: nowSeconds,
                 syncStatus: newStatus,
                 _pending:   true,
                 _localEditedAt: Date.now(),  // for conflict detection
@@ -542,7 +552,10 @@ export async function syncAllPending(csrfToken) {
                         is_shared:     false,
                         labels:        latestNote?.labels      ?? [],
                         updated_at:    'Just now',
-                        updated_at_ts: latestNote?.updated_at_ts ?? item.created_at_ts ?? Math.floor(Date.now() / 1000),
+                        updated_at_ts: latestNote?.updated_at_ts
+                            ?? (latestNote?._localEditedAt ? Math.floor(latestNote._localEditedAt / 1000) : undefined)
+                            ?? item.created_at_ts
+                            ?? Math.floor(Date.now() / 1000),
                         created_at_ts: item.created_at_ts ?? Math.floor(Date.now() / 1000),
                         syncStatus:    'synced',
                         _localEditedAt: latestNote?._localEditedAt ?? undefined,
@@ -642,13 +655,16 @@ export async function queueUpdate(noteId, data) {
         // Keep local cache fresh + mark as pending
         const existing = await db.get(STORE_NOTES, noteId);
         if (existing) {
+            const nowSeconds = Math.floor(Date.now() / 1000);
             await db.put(STORE_NOTES, {
                 ...existing,
                 title:      data.title   ?? existing.title,
                 content:    data.content ?? existing.content,
                 updated_at: 'Pending sync…',
+                updated_at_ts: nowSeconds,
                 syncStatus: 'pending_update',
                 _pending:   true,
+                _localEditedAt: Date.now(),
             });
         }
     } catch (e) {

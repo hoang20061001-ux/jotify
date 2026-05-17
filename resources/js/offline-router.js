@@ -263,6 +263,26 @@ function wireOfflineCardClicks(root) {
     });
 }
 
+/** Format a note timestamp into a simple human-readable label. */
+function formatUpdatedAt(note) {
+    if (note.syncStatus === 'pending_update' && note.updated_at === 'Pending sync…') {
+        return 'Pending sync…';
+    }
+    const ts = note.updated_at_ts || note.created_at_ts || 0;
+    if (!ts) return note.updated_at || '';
+    const age = Math.floor(Date.now() / 1000) - ts;
+    if (age <= 5) return 'Just now';
+    if (age < 60) return `${age}s ago`;
+    const minutes = Math.floor(age / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    const date = new Date(ts * 1000);
+    return date.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+}
+
 /** Fallback simple card builder if buildNoteCard not available */
 function buildSimpleCard(note) {
     return `
@@ -272,7 +292,7 @@ function buildSimpleCard(note) {
              style="display:flex;flex-direction:column;padding:1rem;min-height:120px;background:var(--color-card);border-radius:0.875rem;border:1px solid var(--color-border);cursor:pointer;">
             <h3 style="font-weight:700;font-size:0.9rem;margin:0 0 0.375rem;color:var(--color-body-text);">${escapeHTML(note.title) || 'Untitled'}</h3>
             <p style="font-size:0.8rem;color:var(--color-muted);flex:1;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;">${escapeHTML(note.content)}</p>
-            <div style="font-size:0.625rem;color:var(--color-muted);opacity:0.7;margin-top:auto;padding-top:0.4rem;border-top:1px solid var(--color-border);">${note.updated_at || ''}</div>
+            <div style="font-size:0.625rem;color:var(--color-muted);opacity:0.7;margin-top:auto;padding-top:0.4rem;border-top:1px solid var(--color-border);">${formatUpdatedAt(note)}</div>
         </div>
     </div>`;
 }
@@ -479,10 +499,19 @@ function attachEditorListeners(noteId) {
             await updateNoteOfflineFirst(noteId, { title, content });
 
             // Update notesState in-memory
+            const nowSeconds = Math.floor(Date.now() / 1000);
+            const nowMs = Date.now();
             const strId = String(noteId);
             const idx = window.notesState.findIndex(n => String(n.id) === strId);
             if (idx !== -1) {
-                window.notesState[idx] = { ...window.notesState[idx], title, content, updated_at: 'Just now' };
+                window.notesState[idx] = {
+                    ...window.notesState[idx],
+                    title,
+                    content,
+                    updated_at: 'Just now',
+                    updated_at_ts: nowSeconds,
+                    _localEditedAt: nowMs,
+                };
             }
 
             updateSaveIndicator('saved');
