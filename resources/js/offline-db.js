@@ -542,8 +542,8 @@ export async function syncAllPending(csrfToken) {
                         is_shared:     false,
                         labels:        latestNote?.labels      ?? [],
                         updated_at:    'Just now',
-                        updated_at_ts: latestNote?.updated_at_ts ?? item.created_at_ts || Math.floor(Date.now() / 1000),
-                        created_at_ts: item.created_at_ts || Math.floor(Date.now() / 1000),
+                        updated_at_ts: latestNote?.updated_at_ts ?? item.created_at_ts ?? Math.floor(Date.now() / 1000),
+                        created_at_ts: item.created_at_ts ?? Math.floor(Date.now() / 1000),
                         syncStatus:    'synced',
                         _localEditedAt: latestNote?._localEditedAt ?? undefined,
                     });
