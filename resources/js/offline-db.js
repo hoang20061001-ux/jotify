@@ -453,15 +453,18 @@ export async function updateNoteOfflineFirst(noteId, data) {
                 _pending:   true,
                 _localEditedAt: Date.now(),  // for conflict detection
             });
+            console.log('[Offline] Updated note', noteId, 'status:', newStatus);
         }
         // Queue update for sync (unless it's a temp note — those use pending_creates)
         if (typeof noteId === 'number' || !String(noteId).startsWith('temp_')) {
+            const nowSeconds = Math.floor(Date.now() / 1000);
             await db.put(STORE_UPDATES, {
                 noteId, title: data.title || '', content: data.content || '',
                 queued_at: Date.now(),
                 updated_at_ts: nowSeconds,  // ★ Store original offline edit time
                 _localEditedAt: Date.now(), // for conflict detection
             });
+            console.log('[Offline] Queued update for note', noteId, 'title:', data.title?.substring(0, 30));
         } else {
             // For temp notes: update STORE_CREATES so syncAllPending sends latest content
             const pendingCreate = await db.get(STORE_CREATES, String(noteId));
@@ -504,23 +507,34 @@ let _syncLock = false;
  * @returns {{ created: number, updated: number, failed: number }}
  */
 export async function syncAllPending(csrfToken) {
-    if (_syncLock) return { created: 0, updated: 0, failed: 0 };
+    if (_syncLock) {
+        console.warn('[Sync] Sync already in progress, skipping');
+        return { created: 0, updated: 0, failed: 0 };
+    }
     _syncLock = true;
     const result = { created: 0, updated: 0, failed: 0 };
+
+    console.log('[Sync] Starting sync with CSRF token:', csrfToken ? 'present' : 'MISSING');
 
     try {
         // ── Sync pending creates ──────────────────────────────────────────
         const creates = await getPendingCreates();
+        console.log('[Sync] Found', creates.length, 'pending creates');
         for (const item of creates) {
             try {
                 const res = await fetch('/notes', {
                     method: 'POST',
+                    credentials: 'include',  // ★ Send auth cookies
                     headers: {
                         'X-CSRF-TOKEN': csrfToken,
                         'Accept': 'application/json',
                     },
                 });
-                if (!res.ok) { result.failed++; continue; }
+                if (!res.ok) {
+                    console.error('[Sync] POST /notes failed:', res.status, res.statusText);
+                    result.failed++;
+                    continue;
+                }
 
                 const data = await res.json().catch(() => ({}));
                 const newId = data.id;
@@ -535,6 +549,7 @@ export async function syncAllPending(csrfToken) {
                     // Push the offline content to the new server note
                     await fetch(`/notes/${newId}/auto-save`, {
                         method: 'PUT',
+                        credentials: 'include',  // ★ Send auth cookies
                         headers: {
                             'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': csrfToken,
@@ -573,18 +588,22 @@ export async function syncAllPending(csrfToken) {
                     // Remove from pending_creates queue
                     await removePendingCreate(item.tempId);
                     result.created++;
+                    console.log('[Sync] Created note:', newId);
                 }
             } catch (e) {
+                console.error('[Sync] Error creating note:', e.message);
                 result.failed++;
             }
         }
 
         // ── Sync pending updates ──────────────────────────────────────────
         const updates = await getPendingUpdates();
+        console.log('[Sync] Found', updates.length, 'pending updates');
         for (const item of updates) {
             try {
                 const res = await fetch(`/notes/${item.noteId}/auto-save`, {
                     method: 'PUT',
+                    credentials: 'include',  // ★ Send auth cookies
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken,
@@ -608,9 +627,11 @@ export async function syncAllPending(csrfToken) {
                     });
                     result.updated++;
                 } else {
+                    console.error('[Sync] PUT /notes/' + item.noteId + '/auto-save failed:', res.status, res.statusText);
                     result.failed++;
                 }
             } catch (e) {
+                console.error('[Sync] Error updating note', item.noteId + ':', e.message);
                 result.failed++;
             }
         }
@@ -618,6 +639,7 @@ export async function syncAllPending(csrfToken) {
         _syncLock = false;
     }
 
+    console.log('[Sync] Complete: created=' + result.created + ', updated=' + result.updated + ', failed=' + result.failed);
     return result;
 }
 

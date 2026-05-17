@@ -781,6 +781,7 @@ var currentLabels = @json($note->labels->pluck('id'));
         if (statusEl) statusEl.innerHTML = '<span class="material-icons-outlined text-sm text-amber-500 animate-spin">sync</span> Saving...';
         fetch('/notes/' + noteId + '/auto-save', {
             method: 'PUT',
+            credentials: 'include',  // ★ Send auth cookies
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': window.csrfToken,
@@ -851,6 +852,7 @@ var currentLabels = @json($note->labels->pluck('id'));
                 if (statusEl) statusEl.innerHTML = '<span class="material-icons-outlined text-sm text-amber-500 animate-spin">sync</span> Syncing offline changes...';
                 const res = await fetch('/notes/' + noteId + '/auto-save', {
                     method: 'PUT',
+                    credentials: 'include',  // ★ Send auth cookies
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': window.csrfToken,
@@ -895,6 +897,7 @@ var currentLabels = @json($note->labels->pluck('id'));
 
             const res = await fetch('/notes/' + noteId + '/auto-save', {
                 method: 'PUT',
+                credentials: 'include',  // ★ Send auth cookies
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': window.csrfToken,

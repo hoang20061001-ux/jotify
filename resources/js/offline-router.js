@@ -521,6 +521,7 @@ function attachEditorListeners(noteId) {
                 try {
                     const res = await fetch('/notes/' + noteId + '/auto-save', {
                         method: 'PUT',
+                        credentials: 'include',  // ★ Send auth cookies
                         headers: {
                             'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': window.csrfToken || '',
@@ -584,15 +585,23 @@ export function initOfflineEvents() {
         }
         window._offlineSearchPatched = false; // cho phép patch lại nếu offline tiếp
         try {
-            const result = await syncAllPending(window.csrfToken || '');
+            // Get CSRF token from window or meta tag
+            const csrfToken = window.csrfToken || document.querySelector('meta[name="csrf-token"]')?.content || '';
+            if (!csrfToken) {
+                console.error('[Router] CSRF token not found, sync may fail');
+            }
+            const result = await syncAllPending(csrfToken);
             console.log('[Router] Sync result:', result);
             if (result.created > 0 || result.updated > 0) {
                 showToast(`Synced: ${result.created} created, ${result.updated} updated`);
                 // Refresh notesState after sync
                 await loadNotesState();
+            } else if (result.failed > 0) {
+                showToast(`Sync failed for ${result.failed} items, will retry on next reconnect`, 'warning');
             }
         } catch (e) {
             console.warn('[Router] Sync failed:', e);
+            showToast('Sync failed, will retry on next reconnect', 'error');
         }
         hideSyncBanner();
 
