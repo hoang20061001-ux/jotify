@@ -251,7 +251,8 @@
             </div>
             <h3 class="text-lg font-semibold mb-2">No notes yet</h3>
             <p class="text-muted text-sm mb-6">Create your first note to get started</p>
-            <form action="/notes" method="POST">
+            <form action="/notes" method="POST"
+                  onsubmit="if(!navigator.onLine){event.preventDefault();window.openOfflineNewNote&&window.openOfflineNewNote();return false;}">
                 @csrf
                 <button type="submit" class="btn-primary">
                     <span class="material-icons-outlined">add</span>
