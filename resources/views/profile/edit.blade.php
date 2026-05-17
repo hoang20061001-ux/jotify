@@ -74,7 +74,8 @@
                 </label>
                 <input type="email" name="email"
                        value="{{ old('email', $user->email) }}"
-                       class="form-input w-full" placeholder="your@email.com" required>
+                       class="form-input w-full bg-muted text-muted cursor-not-allowed"
+                       placeholder="your@email.com" readonly>
                 @error('email')
                 <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                 @enderror
