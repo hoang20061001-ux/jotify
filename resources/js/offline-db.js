@@ -459,6 +459,8 @@ export async function updateNoteOfflineFirst(noteId, data) {
             await db.put(STORE_UPDATES, {
                 noteId, title: data.title || '', content: data.content || '',
                 queued_at: Date.now(),
+                updated_at_ts: nowSeconds,  // ★ Store original offline edit time
+                _localEditedAt: Date.now(), // for conflict detection
             });
         } else {
             // For temp notes: update STORE_CREATES so syncAllPending sends latest content
@@ -594,10 +596,15 @@ export async function syncAllPending(csrfToken) {
                 });
                 if (res.ok) {
                     await removePendingUpdate(item.noteId);
-                    // Mark note as synced in IDB
+                    // ★ Mark note as synced, but PRESERVE the original offline edit timestamp
+                    // The server will update updated_at to NOW, but we want to keep the original edit time
+                    const db = await getDB();
+                    const existingNote = await db.get(STORE_NOTES, item.noteId);
                     await updateNoteInIDB({
                         id:         item.noteId,
                         syncStatus: 'synced',
+                        updated_at_ts: item.updated_at_ts ?? existingNote?.updated_at_ts,
+                        _localEditedAt: item._localEditedAt ?? existingNote?._localEditedAt,
                     });
                     result.updated++;
                 } else {
