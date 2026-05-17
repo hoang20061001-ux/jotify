@@ -117,7 +117,19 @@ class NoteController extends Controller
             return response()->json(['error' => 'Note is locked'], 403);
         }
 
-        $note->update($request->only(['title', 'content']));
+        $data = $request->only(['title', 'content']);
+        
+        // ★ If client sends updated_at_ts (from offline sync), don't update the timestamp
+        // This preserves the original edit time from when the user edited it offline
+        if ($request->has('updated_at_ts')) {
+            // Disable timestamps temporarily so update() doesn't change updated_at
+            $note->timestamps = false;
+            $note->update($data);
+            $note->timestamps = true;
+        } else {
+            // Normal online edit - allow timestamp to be updated to now
+            $note->update($data);
+        }
 
         // Broadcast to shared users (only if note has edit-permission shares)
         try {

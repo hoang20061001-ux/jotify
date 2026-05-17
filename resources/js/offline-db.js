@@ -211,6 +211,7 @@ export async function mergeServerNotesIntoIDB(serverNotes) {
                         'Local:', new Date(localTime).toISOString());
                 }
                 // Keep local title/content (user edited offline), update metadata
+                // ★ Also preserve the local edit timestamp and _localEditedAt marker
                 await tx.store.put({
                     ...existing,
                     note_color:      note.note_color      ?? existing.note_color,
@@ -223,6 +224,9 @@ export async function mergeServerNotesIntoIDB(serverNotes) {
                     first_image_url: note.first_image_url  ?? existing.first_image_url ?? null,
                     images_urls:     note.images_urls       ?? existing.images_urls     ?? [],
                     // syncStatus stays 'pending_update'
+                    // ★ Preserve _localEditedAt and updated_at_ts (don't overwrite with server values)
+                    updated_at_ts:   existing.updated_at_ts, // keep local edit time
+                    _localEditedAt:  existing._localEditedAt, // keep local edit marker
                 });
             } else {
                 // Fresh write or update a synced note
@@ -308,6 +312,7 @@ export async function updateNoteInIDB(note) {
         const existing = await db.get(STORE_NOTES, note.id);
         // Upsert: merge with existing or create with defaults
         // Preserve syncStatus unless explicitly provided
+        // ★ CRITICAL: Explicitly preserve _localEditedAt so offline edit timestamps aren't lost
         await db.put(STORE_NOTES, {
             id:           note.id,
             title:        '',
@@ -323,6 +328,8 @@ export async function updateNoteInIDB(note) {
             syncStatus:   'synced',
             ...existing,   // override defaults with existing data
             ...note,       // override with new data
+            // Explicitly preserve _localEditedAt from existing (if present)
+            _localEditedAt: note._localEditedAt !== undefined ? note._localEditedAt : existing?._localEditedAt,
         });
     } catch (e) {
         console.warn('[IDB] updateNoteInIDB failed:', e);
@@ -457,7 +464,11 @@ export async function updateNoteOfflineFirst(noteId, data) {
         // Queue update for sync (unless it's a temp note — those use pending_creates)
         if (typeof noteId === 'number' || !String(noteId).startsWith('temp_')) {
             await db.put(STORE_UPDATES, {
-                noteId, title: data.title || '', content: data.content || '',
+                noteId, 
+                title: data.title || '', 
+                content: data.content || '',
+                updated_at_ts: nowSeconds, // ★ Store the actual edit time for sync
+                _localEditedAt: Date.now(), // ★ Store local edit timestamp for conflict detection
                 queued_at: Date.now(),
             });
         } else {
@@ -590,6 +601,8 @@ export async function syncAllPending(csrfToken) {
                     body: JSON.stringify({
                         title:   item.title   || '',
                         content: item.content || '',
+                        // ★ Send the original edit time so server knows not to update timestamp
+                        updated_at_ts: item.updated_at_ts || Math.floor(Date.now() / 1000),
                     }),
                 });
                 if (res.ok) {
