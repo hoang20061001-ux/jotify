@@ -1322,6 +1322,15 @@
         newBtn.addEventListener('click', async () => {
             try {
                 await apiCall(`/notes/${noteId}`, 'DELETE');
+                if (window.deleteNoteFromIDB) {
+                    try { await window.deleteNoteFromIDB(noteId); } catch (err) { console.warn('[Offline] deleteNoteFromIDB failed:', err); }
+                }
+                if (window.removePendingUpdate) {
+                    try { await window.removePendingUpdate(noteId); } catch (err) {}
+                }
+                if (window.removePendingCreate && String(noteId).startsWith('temp_')) {
+                    try { await window.removePendingCreate(noteId); } catch (err) {}
+                }
                 window.closeModal('delete-modal', () => {
                     showToast('Note deleted successfully');
                     const _cardEl = document.getElementById(`note-card-${noteId}`);

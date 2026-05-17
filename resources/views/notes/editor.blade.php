@@ -1621,6 +1621,15 @@ function confirmDeleteEditor() {
 async function deleteNoteEditor() {
     try {
         await apiCall(`/notes/${noteId}`, 'DELETE');
+        if (window.deleteNoteFromIDB) {
+            try { await window.deleteNoteFromIDB(noteId); } catch (err) { console.warn('[Offline] deleteNoteFromIDB failed:', err); }
+        }
+        if (window.removePendingUpdate) {
+            try { await window.removePendingUpdate(noteId); } catch (err) {}
+        }
+        if (window.removePendingCreate && String(noteId).startsWith('temp_')) {
+            try { await window.removePendingCreate(noteId); } catch (err) {}
+        }
         if (window.ajaxNav) window.ajaxNav('/notes');
         else window.location.href = '/notes';
     } catch(e) { showToast('Error deleting', 'error'); }
