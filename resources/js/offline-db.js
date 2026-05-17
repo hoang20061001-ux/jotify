@@ -36,27 +36,31 @@ let _dbPromise = null;
 function getDB() {
     if (!_dbPromise) {
         _dbPromise = _openAndValidate();
-    }
-    return _dbPromise;
-}
-
-/**
- * Open the DB, run migrations, and validate the schema.
- * If validation fails (stores missing), auto-recover by deleting + reloading.
- */
-async function _openAndValidate() {
-    try {
-        const db = await openDB(DB_NAME, DB_VERSION, {
-            upgrade(db, oldVersion, newVersion) {
-                console.log(`[IDB] Upgrading schema: v${oldVersion} → v${newVersion}`);
-                console.log('[IDB] Existing stores before migration:', [...db.objectStoreNames]);
-
-                // ── Create ALL stores unconditionally (idempotent via contains() guard) ──
-                // This handles: fresh installs, partial legacy schemas from offline-note.html,
-                // and any corrupted DBs that had some stores but not others.
-
-                if (!db.objectStoreNames.contains(STORE_NOTES)) {
-                    console.log('[IDB] Creating store:', STORE_NOTES);
+            } else {
+                // Fresh write or update a synced note
+                // Preserve any local edit timestamp (`_localEditedAt`) so
+                // offline ordering (local edits newer than server timestamps)
+                // is not lost when merging server data.
+                await tx.store.put({
+                    id:              note.id,
+                    title:           note.title            ?? '',
+                    content:         note.content          ?? '',
+                    note_color:      note.note_color       ?? '#ffffff',
+                    is_pinned:       note.is_pinned        ?? false,
+                    pinned_at_ts:    note.pinned_at_ts     ?? note.pinned_at_ts ?? 0,
+                    has_password:    note.has_password      ?? false,
+                    note_password:   note.note_password     ?? null,
+                    is_shared:       note.is_shared         ?? false,
+                    labels:          note.labels            ?? [],
+                    first_image_url: note.first_image_url  ?? null,
+                    images_urls:     note.images_urls       ?? [],
+                    updated_at:      note.updated_at        ?? '',
+                    updated_at_ts:   note.updated_at_ts     ?? note.created_at_ts ?? 0,
+                    created_at_ts:   note.created_at_ts     ?? 0,
+                    syncStatus:      'synced',
+                    _localEditedAt:  existing && existing._localEditedAt ? existing._localEditedAt : undefined,
+                });
+            }
                     const store = db.createObjectStore(STORE_NOTES, { keyPath: 'id' });
                     store.createIndex('is_pinned',  'is_pinned',  { unique: false });
                     store.createIndex('updated_at', 'updated_at', { unique: false });
