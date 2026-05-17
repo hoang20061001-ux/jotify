@@ -317,6 +317,8 @@ class ShareController extends Controller
             'sort_order'    => $maxSort + 1,
         ]);
 
+        $note->touch();
+
         return response()->json([
             'success' => true,
             'image'   => [
