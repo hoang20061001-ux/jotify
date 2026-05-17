@@ -226,6 +226,11 @@ export async function mergeServerNotesIntoIDB(serverNotes) {
                 });
             } else {
                 // Fresh write or update a synced note
+                // ★ Preserve offline edit timestamp: if existing has _localEditedAt,
+                // don't overwrite updated_at_ts with server value (server time is sync time, not edit time)
+                const preservedTs = existing?._localEditedAt
+                    ? Math.floor(existing._localEditedAt / 1000)
+                    : (note.updated_at_ts ?? note.created_at_ts ?? 0);
                 await tx.store.put({
                     id:              note.id,
                     title:           note.title            ?? '',
@@ -240,9 +245,10 @@ export async function mergeServerNotesIntoIDB(serverNotes) {
                     first_image_url: note.first_image_url  ?? null,
                     images_urls:     note.images_urls       ?? [],
                     updated_at:      note.updated_at        ?? '',
-                    updated_at_ts:   note.updated_at_ts     ?? note.created_at_ts ?? 0,
+                    updated_at_ts:   preservedTs,
                     created_at_ts:   note.created_at_ts     ?? 0,
                     syncStatus:      'synced',
+                    _localEditedAt:  existing?._localEditedAt ?? undefined,
                 });
             }
         }
